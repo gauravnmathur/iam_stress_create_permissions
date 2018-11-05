@@ -116,8 +116,10 @@ class PermissionsProducer:
         
         This is an imperfect way to generate permissions at a desired rate 
         because each iteration takes a finite time to perform the queue put and 
-        other operations. Over time it will add up to the skew. Ideally we want a watchdog
-        that timer that wakes up 
+        other operations. Over time it will add up to a skew and the effective rate
+        will turn out to be marginally less than what was requested. Ideally we want 
+        a watchdog that timer that wakes up every second and performs the task
+        of generating create requests and queuing them up.
         """
         while (time.time() - start_time) < args.duration:
             for _ in xrange(0, args.pers_per_sec):
