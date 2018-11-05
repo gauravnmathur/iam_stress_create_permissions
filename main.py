@@ -1,3 +1,24 @@
+#!/usr/bin/env python
+
+###
+# Autonomic Proprietary 1.0
+#
+# Copyright (C) 2018 Autonomic, LLC - All rights reserved
+#
+# Proprietary and confidential.
+#
+# NOTICE:  All information contained herein is, and remains the property of
+# Autonomic, LLC and its suppliers, if any.  The intellectual and technical
+# concepts contained herein are proprietary to Autonomic, LLC and its suppliers
+# and may be covered by U.S. and Foreign Patents, patents in process, and are
+# protected by trade secret or copyright law. Dissemination of this information
+# or reproduction of this material is strictly forbidden unless prior written
+# permission is obtained from Autonomic, LLC.
+#
+# Unauthorized copy of this file, via any medium is strictly prohibited.
+#
+# ###
+
 import logging
 import grpc
 import gen.iam_pb2_grpc as iam_grpc
@@ -7,22 +28,15 @@ import time
 import threading
 import Queue
 import argparse
-from PermissionModel import Permission
-
-def timed(fn):
-    def timed_fn(*args, **kwargs):
-        start_time = time.time()
-        fn(*args, **kwargs)
-        logging.info("%s took %f secs", fn.__name__, time.time()-start_time)
-
-    return timed_fn
+from permission_model import Permission
 
 
 class PermissionsCreator(threading.Thread):
     """
     Permission creating thread. It will create a new IAM client connection and
     start consuming permissions information from the queue to form its create
-    request
+    request. Each thread simulates a distinct application that might be invoking
+    IAM RPC methods.
     """
 
     HOST = "localhost:9091"
@@ -92,6 +106,18 @@ class PermissionsProducer:
         start_time = time.time()
         total_sent = 0
         user_aui = 'aui:iam:user/userfoo'
+
+        """
+        Below is an attempt to perform a rate-driven load. Every seconds we 
+        'produce' a fixed number of permissions and those are added to the work
+        queue. The consumers will pick up the permission information from the 
+        work queue and actually invoke the IAM RPC create permissions method.
+        
+        This is an imperfect way to generate permissions at a desired rate 
+        because each iteration takes a finite time to perform the queue put and 
+        other operations. Over time it will add up to the skew. Ideally we want a watchdog
+        that timer that wakes up 
+        """
         while (time.time() - start_time) < args.duration:
             for _ in xrange(0, args.pers_per_sec):
                 work_q.put(Permission(user_aui,
@@ -106,9 +132,11 @@ class PermissionsProducer:
         print ("Sent: " + str(total_sent) + " permissions")
         print ("Effective: " + str(total_sent/elapsed) + " permissions/sec")
 
+        # Wait for all permission creator threads to complete
         for _ in xrange(0, total_sent):
             response_q.get()
 
+        # Ask all the permission creator threads to die
         for thread in thread_pool:
             thread.join()
 
