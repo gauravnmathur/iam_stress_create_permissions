@@ -40,7 +40,7 @@ class PermissionsCreator(threading.Thread):
     """
 
     HOST = "localhost:9091"
-    GRPC_TIMEOUT = 1
+    GRPC_TIMEOUT = 10
 
     def __init__(self, work_q, response_q, id):
         super(PermissionsCreator, self).__init__()
@@ -51,6 +51,7 @@ class PermissionsCreator(threading.Thread):
 
         self.channel = grpc.insecure_channel(PermissionsCreator.HOST)
         self.stub = iam_grpc.IamServiceStub(self.channel)
+
 
     def create_permission(self,
                           subject_aui,
@@ -128,10 +129,8 @@ class PermissionsProducer:
             time.sleep(1)
 
         elapsed = time.time() - start_time
-        print ("Elapsed: " + str(elapsed) + " seconds")
-        print ("Sent: " + str(total_sent) + " permissions")
-        print ("Effective: " + str(total_sent/elapsed) + " permissions/sec")
 
+        print ("Dispatched all create requests. Waiting for all creators to complete...")
         # Wait for all permission creator threads to complete
         for _ in xrange(0, total_sent):
             response_q.get()
@@ -139,6 +138,10 @@ class PermissionsProducer:
         # Ask all the permission creator threads to die
         for thread in thread_pool:
             thread.join()
+
+        print ("Elapsed: " + str(elapsed) + " seconds")
+        print ("Sent: " + str(total_sent) + " permissions")
+        print ("Effective: " + str(total_sent/elapsed) + " permissions/sec")
 
         print("Bye!")
 
